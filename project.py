@@ -1,5 +1,9 @@
 #project.py
 
+from ast import literal_eval
+from typing import Literal
+
+
 def satSolve(numVar, numClause, clauses, M):
     for c in clauses:
         if (len(c) == 1):
@@ -8,8 +12,35 @@ def satSolve(numVar, numClause, clauses, M):
             else:
                 return False, []
 
-
     return True, M
+
+
+
+# def propagate
+
+# our pure function gets all pure literals at once
+def pure(numVar, numClause, clauses, M):
+    pure_literals = set()
+    for i in range(1, numVar+1):
+        if (i in (item for sublist in clauses for item in sublist) and -i not in (item for sublist in clauses for item in sublist)):
+            pure_literals.add(i)
+        elif (-i in (item for sublist in clauses for item in sublist) and i not in (item for sublist in clauses for item in sublist)):
+            pure_literals.add(-i)
+            
+    for literal in pure_literals:
+        M[abs(literal) - 1] = literal
+    return M
+
+
+# def decide
+# def conflict
+# def explain
+# def backjump
+# def fail
+# def learn
+# def forget
+# def restart
+
 
 if __name__ == "__main__":
 
@@ -21,15 +52,15 @@ if __name__ == "__main__":
     l = content.split('\n')
     clist = []
     
-    vars = 0
-    clauses = 0
+    numVars = 0
+    numClauses = 0
     
     for i in l:
         if(i):
             if (i[0] == 'p'):
                 line = i.split(' ')
-                vars = int(line[2])
-                clauses = int(line[3])
+                numVars = int(line[2])
+                numClauses = int(line[3])
 
             elif (i[0] != 'c'):
                 line = i.split(' ')
@@ -39,19 +70,19 @@ if __name__ == "__main__":
                         s = s + " " + j
 
                 clist.append(s)
-    
-    M = [0]*vars
 
-    cl = []
+    clauses = []
     for i in clist:
-        e = i.split(' ')
         c = []
-        for j in e:
+        for j in (i.split(' ')):
             if (j != ''):
                 c.append(int(j))
-        cl.append(c)
+        clauses.append(c)
+        
+    M = [0]*numVars
+    M = pure(numVars, numClauses, clauses, M)   # all pure literals are first obtained
 
-    sat, lits = satSolve(vars, clauses, cl, M)
+    sat, lits = satSolve(numVars, numClauses, clauses, M)
     if(sat):
         print("SATISFIABLE")
         s = ""
@@ -60,5 +91,3 @@ if __name__ == "__main__":
         print("v " + s)
     else:
         print("UNSATISFIABLE\n")
-
-    
