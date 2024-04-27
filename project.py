@@ -43,7 +43,19 @@ def pure(numVar, clauses, M):
         M[abs(literal) - 1] = literal
     return M
 
-# def decide
+def decide(M):
+    for i, value in enumerate(M):
+        if value == 0:
+            # Assign positive or negative value to unassigned variable
+            M[i] = i + 1  # Positive assignment
+            # M[i] = -(i + 1)  # Negative assignment
+            return M
+    return M  # No unassigned variables left
+
+# Example usage:
+# Assume M is the current assignment with some variables assigned and others unassigned.
+# Call decide(M) to make a decision and update M.
+
 
 def conflict(clauses, M, C):
     # check if C is not empty first
@@ -55,10 +67,31 @@ def conflict(clauses, M, C):
             return clause
     return None
 
+def backjump(C, M):
+    highest_level = 0
+    for lit in C:
+        level = abs(M[abs(lit) - 1])
+        if level > highest_level:
+            highest_level = level
+    return highest_level
 
-# def explain
-# def backjump
-# def fail
+def explain(C, M):
+    explanation = []
+    for lit in C:
+        if M[abs(lit) - 1] == -lit:
+            explanation.append(lit)
+    return explanation
+
+def fail():
+    print("UNSATISFIABLE")
+    exit()
+    
+    # Example usage:
+    # Assume C is the conflict clause [1, -2, 3] and M is the current assignment.
+    # Explanation: [1, -2, 3] caused the conflict, so the explanation is [1, -2, 3].
+    # Backjump: The highest decision level in C is 3 (from literal 3), so backjump to level 3.
+    # Fail: If the solver reaches this point, it means the instance is unsatisfiable.
+
 # def learn
 # def forget
 # def restart
