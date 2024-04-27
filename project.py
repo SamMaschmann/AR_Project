@@ -15,11 +15,23 @@ def satSolve(numVar, numClause, clauses, M):
     return True, M
 
 
-
-# def propagate
+def propagate(clauses, M):
+    changed = True
+    while changed:
+        changed = False
+        for clause in clauses:
+            unassigned_literals = [lit for lit in clause if M[abs(lit) - 1] == 0]
+            if len(unassigned_literals) == 1:
+                lit = unassigned_literals[0]
+                M[abs(lit) - 1] = lit
+                changed = True
+            elif len(unassigned_literals) == 0:
+                # Found a conflict
+                return M
+    return M
 
 # our pure function gets all pure literals at once
-def pure(numVar, numClause, clauses, M):
+def pure(numVar, clauses, M):
     pure_literals = set()
     for i in range(1, numVar+1):
         if (i in (item for sublist in clauses for item in sublist) and -i not in (item for sublist in clauses for item in sublist)):
@@ -31,9 +43,19 @@ def pure(numVar, numClause, clauses, M):
         M[abs(literal) - 1] = literal
     return M
 
-
 # def decide
-# def conflict
+
+def conflict(clauses, M, C):
+    # check if C is not empty first
+    if C:
+        return C
+    for clause in clauses:
+        unsatisfiable = all(M[abs(lit) - 1] == -lit for lit in clause)
+        if unsatisfiable:
+            return clause
+    return None
+
+
 # def explain
 # def backjump
 # def fail
@@ -80,7 +102,13 @@ if __name__ == "__main__":
         clauses.append(c)
         
     M = [0]*numVars
-    M = pure(numVars, numClauses, clauses, M)   # all pure literals are first obtained
+    M = pure(numVars, clauses, M)   # all pure literals are first obtained
+    
+    C = []
+    
+    C = conflict(clauses, M, C)
+    M = propagate(clauses, M)
+    
 
     sat, lits = satSolve(numVars, numClauses, clauses, M)
     if(sat):
