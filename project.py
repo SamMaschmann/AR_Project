@@ -5,14 +5,69 @@ from typing import Literal
 
 
 def satSolve(numVar, numClause, clauses, M):
-    for c in clauses:
-        if (len(c) == 1):
-            if (M[abs(c[0])-1] == 0):
-                M[abs(c[0])-1] = c[0]
-            else:
-                return False, []
+    
+    temp = []   # temp is a copy of clauses that doesn't get changed. It is used to handle some bugs that happen when removing elements from clauses
+    for i in clauses:
+        temp.append(i)
 
-    return True, M
+    for c in clauses:
+        if (len(c) == 0):       # if there is an empty clause in our list, that means that it is unsatisfiable
+            return False, []    
+        
+        if (len(c) == 1):                           # this chunk of code looks at every clause of length 1 and checks if we have a value for it already
+            if (M[abs(c[0])-1] == 0):               # if M has a value and the value doesn't match, then there is a conflict, so it is unsatisfiable
+                M[abs(c[0])-1] = c[0]               # ex: M = [1, 0, 3] and clauses contains [-1], then it is unsatisfiable
+                for clause in temp:                 # if M doesn't have a value, it assigns one and removes clauses with that value and removes negations of that value
+                    if c[0] in clause:              # ex: if we are adding [1] to M, then in clauses: [1, 2, 3] gets removed (since it is satisfied) and [-1, 4, 6] becomes [4, 6]
+                        clauses.remove(clause)      # This works similarly to the Propagate rule
+                    elif (c[0] * -1) in clause:
+                        clause.remove(c[0] * -1)
+                return satSolve(numVar, numClause, clauses, M)
+            elif (M[abs(c[0])-1] != c[0]):
+                return False, []
+            
+
+    if (len(clauses) == 0):         # if there are no more clauses left to satisfy, then we have reached an assignment that satisfies the clause set
+        return True, M
+    else:               # otherwise, we have to decide
+        if (0 in M):
+            z = M.index(0)
+            m1 = []         # m1 and m2 are the two assignemnts we try with each decision. m1 tries with a positive value, and m2 with a negative value (ie 3 and -3)
+            m2 = []
+            for i in range(0, len(M)):
+                if(i == z):
+                    m1.append(i+1)
+                    m2.append(-1*(i+1))
+                else:
+                    m1.append(M[i])
+                    m2.append(M[i])
+            c1 = []         # c1 and c2 are the clause sets left over after we assign values to m1 and m2. (c1 for pos and c2 for neg)
+            c2 = []         # the process for removing clauses is the same as above in the propagation chunk
+            for clause in clauses:
+                if (z+1) in clause: 
+                    clause.remove(z+1)
+                    c2.append(clause)
+                elif ((z+1) * -1) in clause:
+                    clause.remove((z+1) * -1)
+                    c1.append(clause)
+                else:
+                    c1.append(clause)
+                    c2.append(clause)
+
+            x, a1 = satSolve(numVar, numClause, c1, m1)         # first we check if the assignment will work if the value is positive...
+            if(x):
+                return True, a1
+            else:
+                y, a2 = satSolve(numVar, numClause, c2, m2)     # ...and if not we try with negative
+                if(y):
+                    return True, a2
+                else:
+                    return False, []                # if neither work, then it fails
+        else:
+            return True, M
+
+
+
 
 
 def propagate(clauses, M):
@@ -83,7 +138,7 @@ def explain(C, M):
     return explanation
 
 def fail():
-    print("UNSATISFIABLE")
+    print("s UNSATISFIABLE\n")
     exit()
     
     # Example usage:
@@ -140,15 +195,18 @@ if __name__ == "__main__":
     C = []
     
     C = conflict(clauses, M, C)
-    M = propagate(clauses, M)
+    #M = propagate(clauses, M)
     
 
     sat, lits = satSolve(numVars, numClauses, clauses, M)
     if(sat):
-        print("SATISFIABLE")
+        #for i in range(0, len(lits)):
+        #    if lits[i] == 0:
+        #        lits[i] = i+1
+        print("s SATISFIABLE")
         s = ""
         for i in lits:
             s = s + str(i) + " "
         print("v " + s)
     else:
-        print("UNSATISFIABLE\n")
+        print("s UNSATISFIABLE\n")
