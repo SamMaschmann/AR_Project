@@ -1,89 +1,84 @@
-#project.py
+# project.py
 
+# Portions of this code were inspired by the implementation at https://kienyew.github.io/CDCL-SAT-Solver-from-Scratch/The-Implementation.html
+
+import random
 from ast import literal_eval
-from typing import Literal
+from typing import List, Iterator, Set, Optional, Tuple
+from structures import Literal, Clause, Formula, Assignment, Assignments
 
 
-def satSolve(numVar, numClause, clauses, M):
+
+
+def satSolve(formula, M):
+    assignments = M
+
+    reason, clause = propagate(formula, assignments)
+    if (reason == 'conflict'):
+        return False, []
     
-    temp = []   # temp is a copy of clauses that doesn't get changed. It is used to handle some bugs that happen when removing elements from clauses
-    for i in clauses:
-        temp.append(i)
-
-    for c in clauses:
-        if (len(c) == 0):       # if there is an empty clause in our list, that means that it is unsatisfiable
-            return False, []    
-        
-        if (len(c) == 1):                           # this chunk of code looks at every clause of length 1 and checks if we have a value for it already
-            if (M[abs(c[0])-1] == 0):               # if M has a value and the value doesn't match, then there is a conflict, so it is unsatisfiable
-                M[abs(c[0])-1] = c[0]               # ex: M = [1, 0, 3] and clauses contains [-1], then it is unsatisfiable
-                for clause in temp:                 # if M doesn't have a value, it assigns one and removes clauses with that value and removes negations of that value
-                    if c[0] in clause:              # ex: if we are adding [1] to M, then in clauses: [1, 2, 3] gets removed (since it is satisfied) and [-1, 4, 6] becomes [4, 6]
-                        clauses.remove(clause)      # This works similarly to the Propagate rule
-                    elif (c[0] * -1) in clause:
-                        clause.remove(c[0] * -1)
-                return satSolve(numVar, numClause, clauses, M)
-            elif (M[abs(c[0])-1] != c[0]):
-                return False, []
-            
-
-    if (len(clauses) == 0):         # if there are no more clauses left to satisfy, then we have reached an assignment that satisfies the clause set
-        return True, M
-    else:               # otherwise, we have to decide
-        if (0 in M):
-            z = M.index(0)
-            m1 = []         # m1 and m2 are the two assignemnts we try with each decision. m1 tries with a positive value, and m2 with a negative value (ie 3 and -3)
-            m2 = []
-            for i in range(0, len(M)):
-                if(i == z):
-                    m1.append(i+1)
-                    m2.append(-1*(i+1))
-                else:
-                    m1.append(M[i])
-                    m2.append(M[i])
-            c1 = []         # c1 and c2 are the clause sets left over after we assign values to m1 and m2. (c1 for pos and c2 for neg)
-            c2 = []         # the process for removing clauses is the same as above in the propagation chunk
-            for clause in clauses:
-                if (z+1) in clause: 
-                    clause.remove(z+1)
-                    c2.append(clause)
-                elif ((z+1) * -1) in clause:
-                    clause.remove((z+1) * -1)
-                    c1.append(clause)
-                else:
-                    c1.append(clause)
-                    c2.append(clause)
-
-            x, a1 = satSolve(numVar, numClause, c1, m1)         # first we check if the assignment will work if the value is positive...
-            if(x):
-                return True, a1
+    while not (allVarsAssigned(formula, assignments)):
+        var, val = decide(formula, assignments)
+        assignments.dl = assignments.dl + 1
+        assignments.assign(var, val, antecedent=None)
+        while True:
+            reason, clause = propagate(formula, assignments)
+            if (reason != 'conflict'):
+                break
             else:
-                y, a2 = satSolve(numVar, numClause, c2, m2)     # ...and if not we try with negative
-                if(y):
-                    return True, a2
-                else:
-                    return False, []                # if neither work, then it fails
+                b, learnedClause = conflictAnalysis(clause, assignments)
+                if (b < 0):
+                    return False, []
+                learn(formula, learnedClause)
+                backjump(b, assignments)
+                assignments.dl = b
+
+    return True, assignments
+
+
+
+
+def getStatus(clause, assignments):
+    
+    values = []
+    for literal in clause:
+        if literal.variable not in assignments:
+            values.append(None)
         else:
-            return True, M
+            values.append(assignments.value(literal))
+
+    if True in values:                              # All literals are True
+        return 'satisfied'
+    elif values.count(False) == len(values):        # All literals are False
+        return 'unsatisfied'
+    elif values.count(False) == len(values) - 1:    # All except one literal are False
+        return 'unit'
+    else:                                           # None of the above
+        return 'unresolved'
 
 
+def propagate(formula, assignments):
+    done = False
+    while not done:
+        done = True
+        for clause in formula:
+            status = getStatus(clause, assignments)
+            if status == 'unresolved' or status == 'satisfied':
+                continue
+            elif status == 'unit':
+                # select literal to propagate
+                literal = next(literal for literal in clause if literal.variable not in assignments)
+                var = literal.variable
+                val = not literal.negation
 
+                # assign variable according to unit rule
+                assignments.assign(var, val, antecedent=clause)
+                done = False
+            else:
+                # conflict
+                return ('conflict', clause)
 
-
-def propagate(clauses, M):
-    changed = True
-    while changed:
-        changed = False
-        for clause in clauses:
-            unassigned_literals = [lit for lit in clause if M[abs(lit) - 1] == 0]
-            if len(unassigned_literals) == 1:
-                lit = unassigned_literals[0]
-                M[abs(lit) - 1] = lit
-                changed = True
-            elif len(unassigned_literals) == 0:
-                # Found a conflict
-                return M
-    return M
+    return ('unresolved', None)
 
 # our pure function gets all pure literals at once
 def pure(numVar, clauses, M):
@@ -98,18 +93,12 @@ def pure(numVar, clauses, M):
         M[abs(literal) - 1] = literal
     return M
 
-def decide(M):
-    for i, value in enumerate(M):
-        if value == 0:
-            # Assign positive or negative value to unassigned variable
-            M[i] = i + 1  # Positive assignment
-            # M[i] = -(i + 1)  # Negative assignment
-            return M
-    return M  # No unassigned variables left
 
-# Example usage:
-# Assume M is the current assignment with some variables assigned and others unassigned.
-# Call decide(M) to make a decision and update M.
+def decide(formula, assignments):
+    unassigned_vars = [var for var in formula.variables() if var not in assignments]
+    var = random.choice(unassigned_vars)
+    val = random.choice([True, False])
+    return (var, val)
 
 
 def conflict(clauses, M, C):
@@ -122,13 +111,16 @@ def conflict(clauses, M, C):
             return clause
     return None
 
-def backjump(C, M):
-    highest_level = 0
-    for lit in C:
-        level = abs(M[abs(lit) - 1])
-        if level > highest_level:
-            highest_level = level
-    return highest_level
+
+def backjump(b, assignments):
+    removing = []
+    for var, assignment in assignments.items():
+        if assignment.dl > b:
+            removing.append(var)
+            
+    for var in removing:
+        assignments.pop(var)
+
 
 def explain(C, M):
     explanation = []
@@ -136,6 +128,7 @@ def explain(C, M):
         if M[abs(lit) - 1] == -lit:
             explanation.append(lit)
     return explanation
+
 
 def fail():
     print("s UNSATISFIABLE\n")
@@ -147,9 +140,54 @@ def fail():
     # Backjump: The highest decision level in C is 3 (from literal 3), so backjump to level 3.
     # Fail: If the solver reaches this point, it means the instance is unsatisfiable.
 
-# def learn
+
+def learn(formula, clause):
+    formula.clauses.append(clause)
+
+
+def allVarsAssigned(formula, assignments):
+    return len(formula.variables()) == len(assignments)
+
+
+def conflictAnalysis(clause, assignments) -> Tuple[int, Clause]:
+    if assignments.dl == 0:
+        return (-1, None)
+ 
+    # current decision level
+    literals = [literal for literal in clause if assignments[literal.variable].dl == assignments.dl]
+    while len(literals) != 1:
+
+        literals = filter(lambda lit: assignments[lit.variable].antecedent != None, literals)
+
+        literal = next(literals)
+        antecedent = assignments[literal.variable].antecedent
+        clause = resolve(clause, antecedent, literal.variable)
+
+        literals = [literal for literal in clause if assignments[literal.variable].dl == assignments.dl]
+
+    # new learnt clause
+    # compute the backtrack level b (second largest decision level)
+    decision_levels = sorted(set(assignments[literal.variable].dl for literal in clause))
+    if len(decision_levels) <= 1:
+        return 0, clause
+    else:
+        return decision_levels[-2], clause
+    
+
+def resolve(clauseA, clauseB, x):
+    result = set(clauseA.literals + clauseB.literals) - {Literal(x, True), Literal(x, False)}
+    result = list(result)
+    return Clause(result)
+
+
+
+
+
 # def forget
 # def restart
+
+
+
 
 
 if __name__ == "__main__":
@@ -183,30 +221,39 @@ if __name__ == "__main__":
 
     clauses = []
     for i in clist:
-        c = []
+        cl = []
         for j in (i.split(' ')):
             if (j != ''):
-                c.append(int(j))
+                l = Literal(abs(int(j)), int(j)<0)
+                cl.append(l)
+        c = Clause(cl)
         clauses.append(c)
+    formula = Formula(clauses)
         
     M = [0]*numVars
     M = pure(numVars, clauses, M)   # all pure literals are first obtained
+    #C = []
     
-    C = []
-    
-    C = conflict(clauses, M, C)
+    #C = conflict(clauses, M, C)
     #M = propagate(clauses, M)
-    
 
-    sat, lits = satSolve(numVars, numClauses, clauses, M)
+    a = Assignments()
+    for i in range (0, len(M)):
+        if  (M[i] != 0):
+            a.assign(i+1, M[i]<0, antecedent=None)
+
+
+    sat, lits = satSolve(formula, a)
+
+
     if(sat):
-        #for i in range(0, len(lits)):
-        #    if lits[i] == 0:
-        #        lits[i] = i+1
         print("s SATISFIABLE")
-        s = ""
-        for i in lits:
-            s = s + str(i) + " "
-        print("v " + s)
+        s = "v "
+        for t in lits:
+            if(lits.get(t).value):
+                s = s + "-" + str(t) + " "
+            else:
+                s = s + str(t) + " "
+        print(s)
     else:
-        print("s UNSATISFIABLE\n")
+        fail()
