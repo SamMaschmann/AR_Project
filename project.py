@@ -129,17 +129,15 @@ def explain(C, M):
             explanation.append(lit)
     return explanation
 
-
-def fail():
-    print("s UNSATISFIABLE\n")
-    exit()
-    
-    # Example usage:
+# Example usage:
     # Assume C is the conflict clause [1, -2, 3] and M is the current assignment.
     # Explanation: [1, -2, 3] caused the conflict, so the explanation is [1, -2, 3].
     # Backjump: The highest decision level in C is 3 (from literal 3), so backjump to level 3.
     # Fail: If the solver reaches this point, it means the instance is unsatisfiable.
 
+def fail():
+    print("s UNSATISFIABLE\n")
+    exit()
 
 def learn(formula, clause):
     formula.clauses.append(clause)
@@ -179,22 +177,28 @@ def resolve(clauseA, clauseB, x):
     result = list(result)
     return Clause(result)
 
+def forget(formula, learned_clauses, threshold):
+    """
+    This function removes learned clauses that are not frequently used.
+    """
+    for clause in learned_clauses:
+        if clause.usage < threshold:
+            formula.remove(clause)
+            learned_clauses.remove(clause)
 
-
-
-
-# def forget
-# def restart
-
-
-
-
+def restart(assignments, threshold):
+    """
+    This function restarts the search process when a certain threshold is reached.
+    """
+    if assignments.num_assignments > threshold:
+        assignments.clear()
+        assignments.dl = 0
 
 if __name__ == "__main__":
 
     inFile = open(input("Enter input file: "))
     # When prompted to give a file name in the console, type the response in the following format:
-    # ./project1-tests/{sat or unsat}/{filename}
+    # ./project1-revised-tests/{sat or unsat}/{filename}
 
     content = inFile.read()
     l = content.split('\n')
