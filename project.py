@@ -11,6 +11,11 @@ from structures import Literal, Clause, Formula, Assignment, Assignments
 
 
 def satSolve(formula, M):
+    # Initialize the activity scores and other parameters
+    activity_scores = initialize_activity_scores(formula)
+    increment = 1  # The value by which activity scores are incremented during conflict analysis
+    decay_factor = 0.95  # The decay factor for activity scores
+
     assignments = M
 
     reason, clause = propagate(formula, assignments)
@@ -18,7 +23,7 @@ def satSolve(formula, M):
         return False, []
     
     while not (allVarsAssigned(formula, assignments)):
-        var, val = decide(formula, assignments)
+        var, val = decide(formula, assignments, activity_scores)
         assignments.dl = assignments.dl + 1
         assignments.assign(var, val, antecedent=None)
         while True:
@@ -26,10 +31,10 @@ def satSolve(formula, M):
             if (reason != 'conflict'):
                 break
             else:
-                b, learnedClause = conflictAnalysis(clause, assignments)
+                b, learnedClause = conflictAnalysis(clause, assignments, activity_scores, increment, decay_factor)
                 if (b < 0):
                     return False, []
-                learn(formula, learnedClause)
+                learn(formula, learnedClause, activity_scores, increment)
                 backjump(b, assignments)
                 assignments.dl = b
 
@@ -94,9 +99,9 @@ def pure(numVar, clauses, M):
     return M
 
 
-def decide(formula, assignments):
+def decide(formula, assignments, activity_scores):
     unassigned_vars = [var for var in formula.variables() if var not in assignments]
-    var = random.choice(unassigned_vars)
+    var = max(unassigned_vars, key=lambda v: activity_scores.get(v, 0))
     val = random.choice([True, False])
     return (var, val)
 
@@ -139,29 +144,43 @@ def fail():
     print("s UNSATISFIABLE\n")
     exit()
 
-def learn(formula, clause):
-    formula.clauses.append(clause)
+def learn(formula, learned_clause, activity_scores, increment):
+    # Add the learned clause to the formula
+    formula.clauses.append(learned_clause)
+
+    for lit in learned_clause:
+        activity_scores[lit.variable] += increment
+
+    if hasattr(learned_clause, 'usage'):
+        learned_clause.usage += 1
+
 
 
 def allVarsAssigned(formula, assignments):
     return len(formula.variables()) == len(assignments)
 
 
-def conflictAnalysis(clause, assignments) -> Tuple[int, Clause]:
+def conflictAnalysis(clause, assignments, activity_scores, increment, decay_factor):
     if assignments.dl == 0:
         return (-1, None)
  
     # current decision level
     literals = [literal for literal in clause if assignments[literal.variable].dl == assignments.dl]
     while len(literals) != 1:
-
         literals = filter(lambda lit: assignments[lit.variable].antecedent != None, literals)
-
         literal = next(literals)
         antecedent = assignments[literal.variable].antecedent
         clause = resolve(clause, antecedent, literal.variable)
 
+        # Update activity scores for each variable in the antecedent clause
+        for lit in antecedent:
+            activity_scores[lit.variable] += increment
+
         literals = [literal for literal in clause if assignments[literal.variable].dl == assignments.dl]
+
+    # Decay the activity scores
+    for var in activity_scores:
+        activity_scores[var] *= decay_factor
 
     # new learnt clause
     # compute the backtrack level b (second largest decision level)
@@ -193,6 +212,15 @@ def restart(assignments, threshold):
     if assignments.num_assignments > threshold:
         assignments.clear()
         assignments.dl = 0
+
+def initialize_activity_scores(formula):
+    activity_scores = {var: 0 for var in formula.variables()}
+    return activity_scores
+
+def decay_activity_scores(activity_scores, decay_factor):
+    for var in activity_scores:
+        activity_scores[var] *= decay_factor
+
 
 if __name__ == "__main__":
 

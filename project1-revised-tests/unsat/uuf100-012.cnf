@@ -9,7 +9,7 @@ c    forced? no
 c    mixed sat? no 
 c    clause length = 3 
 c
-p cnf 100  430 
+p cnf 100 430 
  -48 -28 12 0
 35 -10 85 0
 -30 54 19 0
