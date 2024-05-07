@@ -2,7 +2,7 @@
 
 # Portions of this code were inspired by the implementation at https://kienyew.github.io/CDCL-SAT-Solver-from-Scratch/The-Implementation.html
 
-import random
+import random, threading, time
 from ast import literal_eval
 from typing import List, Iterator, Set, Optional, Tuple
 from structures import Literal, Clause, Formula, Assignment, Assignments
@@ -221,71 +221,100 @@ def decay_activity_scores(activity_scores, decay_factor):
     for var in activity_scores:
         activity_scores[var] *= decay_factor
 
+# Define the handler for the alarm signal
+def handler(signum, frame):
+    print("Timeout! The program took too long to execute.")
+    exit(1)
+
+# Define a function to raise a TimeoutError after a delay
+def raise_timeout(delay, error_message="Timeout!"):
+    def timeout():
+        raise TimeoutError(error_message)
+    timer = threading.Timer(delay, timeout)
+    timer.start()
+    return timer
 
 if __name__ == "__main__":
+    # Set the timeout duration (in seconds)
+    timeout_duration = 300  # 1 minute timeout
 
-    inFile = open(input("Enter input file: "))
-    # When prompted to give a file name in the console, type the response in the following format:
-    # ./project1-revised-tests/{sat or unsat}/{filename}
-
-    content = inFile.read()
-    l = content.split('\n')
-    clist = []
-    
-    numVars = 0
-    numClauses = 0
-    
-    for i in l:
-        if(i):
-            if (i[0] == 'p'):
-                line = i.split(' ')
-                numVars = int(line[2])
-                numClauses = int(line[3])
-
-            elif (i[0] != 'c'):
-                line = i.split(' ')
-                s = ""
-                for j in line:
-                    if (j != '0'):
-                        s = s + " " + j
-
-                clist.append(s)
-
-    clauses = []
-    for i in clist:
-        cl = []
-        for j in (i.split(' ')):
-            if (j != ''):
-                l = Literal(abs(int(j)), int(j)<0)
-                cl.append(l)
-        c = Clause(cl)
-        clauses.append(c)
-    formula = Formula(clauses)
+    try:
+        inFile = open(input("Enter input file: "))
+        content = inFile.read()
+        l = content.split('\n')
+        clist = []
         
-    M = [0]*numVars
-    M = pure(numVars, clauses, M)   # all pure literals are first obtained
-    #C = []
-    
-    #C = conflict(clauses, M, C)
-    #M = propagate(clauses, M)
+        numVars = 0
+        numClauses = 0
+        
+        for i in l:
+            if(i):
+                if (i[0] == 'p'):
+                    line = i.split(' ')
+                    numVars = int(line[2])
+                    numClauses = int(line[3])
 
-    a = Assignments()
-    for i in range (0, len(M)):
-        if  (M[i] != 0):
-            a.assign(i+1, M[i]<0, antecedent=None)
+                elif (i[0] != 'c'):
+                    line = i.split(' ')
+                    s = ""
+                    for j in line:
+                        if (j != '0'):
+                            s = s + " " + j
+
+                    clist.append(s)
+
+        clauses = []
+        for i in clist:
+            cl = []
+            for j in (i.split(' ')):
+                if (j != ''):
+                    l = Literal(abs(int(j)), int(j)<0)
+                    cl.append(l)
+            c = Clause(cl)
+            clauses.append(c)
+        formula = Formula(clauses)
+            
+        M = [0]*numVars
+        M = pure(numVars, clauses, M)   # all pure literals are first obtained
+
+        a = Assignments()
+        for i in range (0, len(M)):
+            if  (M[i] != 0):
+                a.assign(i+1, M[i]<0, antecedent=None)
+
+        # Start the timeout timer
+        timer = raise_timeout(timeout_duration)
+        # Check the current time to record runtime.
+        start_time = time.time_ns() / (10 ** 9)
+        # Call the satSolve function to solve the formula and determine satisfiability.
+        sat, lits = satSolve(formula, a)
+        # Check the end time to determine runtime.
+        end_time = time.time_ns() / (10 ** 9)
+        # Calculation for the total runtime.
+        runtime = end_time - start_time
 
 
-    sat, lits = satSolve(formula, a)
+        if(sat):
+            print("s SATISFIABLE")
+            s = "v "
+            for t in lits:
+                if(lits.get(t).value):
+                    s = s + "-" + str(t) + " "
+                else:
+                    s = s + str(t) + " "
+            print(s)
+            print(f"Runtime of the function: {runtime:.4f} seconds.")
+            exit()
+        else:
+            print(f"Runtime of the function: {runtime:.4f} seconds.")
+            fail()
 
 
-    if(sat):
-        print("s SATISFIABLE")
-        s = "v "
-        for t in lits:
-            if(lits.get(t).value):
-                s = s + "-" + str(t) + " "
-            else:
-                s = s + str(t) + " "
-        print(s)
-    else:
-        fail()
+    except TimeoutError as e:
+        print(e)
+        exit()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        # Cancel the timer if the function completes before the timeout
+        timer.cancel()
