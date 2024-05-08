@@ -33,6 +33,12 @@ class Clause:
 
     def __len__(self):
         return len(self.literals)
+    
+    def __hash__(self):
+        x = 0 
+        for lit in self.literals:
+            x ^= hash(lit)
+        return x
 
 @dataclass
 class Formula:
